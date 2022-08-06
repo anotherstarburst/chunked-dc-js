@@ -172,6 +172,48 @@ Registering a message listener and adding chunks is identical to the
 Note that this unchunker will reject chunks with modes other than
 unreliable/unordered.
 
+#### Example of sending / receiving JSON or simple strings in a webRTC context
+
+```javascript
+import { UnreliableUnorderedChunker } from '@saltyrtc/chunked-dc/dist/chunked-dc.es2015';
+
+const MAX_MESSAGE_LENGTH_BYTES = 16000 // Based on Chrome
+const CHUNK_HEADER_LENGTH_BYTES = 9
+const CHUNK_MAX_LENGTH_BYTES = MAX_MESSAGE_LENGTH_BYTES - CHUNK_HEADER_LENGTH_BYTES
+
+const payload = {'hello': 'world'}
+const encoder = new TextEncoder();
+const message = encoder.encode(JSON.stringify(payload));
+const messageId = Math.floor(Math.random() * 256 * 128);
+const chunkLength = CHUNK_MAX_LENGTH_BYTES; // Chunk byte length *including* 9 byte header
+const chunker = new UnreliableUnorderedChunker(messageId, message, chunkLength);
+
+while (chunker.hasNext) {
+  const chunk = chunker.next().value;
+  peer.send(chunk); // simple-peer webRTC instance
+}
+```
+
+And on the receiving end:
+
+```javascript
+import { UnreliableUnorderedUnchunker } from '@saltyrtc/chunked-dc/dist/chunked-dc.es2015';
+
+let unchunker = new UnreliableUnorderedUnchunker();
+
+unchunker.onMessage = (encodedMessage: Uint8Array) => {
+  const decoder = new TextDecoder();
+  const payloadStr = decoder.decode(encodedMessage);
+  const payload = JSON.parse(payloadStr);
+  console.log(payload); // should return {'hello': 'world'}
+}
+
+peer.on('data', data => {
+  unchunker.add(data);
+});
+
+```
+
 #### Cleanup
 
 Because the `UnreliableUnorderedUnchunker` instance needs to keep track of
